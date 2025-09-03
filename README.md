@@ -1,194 +1,202 @@
 # UPBOT – Backend (Laravel)
 
-Este proyecto es un asistente para consultas de la UPB.  
-El sistema está pensado para que un bot (por ejemplo con n8n) pueda detectar si una consulta de un alumno es **información pública** o **información privada**.  
-Cuando la información es privada, el bot no la entrega directamente, sino que genera un **token de acceso único**. El alumno debe ingresar este token en la plataforma web, verificar su identidad (por ejemplo con su CI), y recién ahí puede ver su información protegida.
+Este proyecto es un **asistente para consultas académicas de la UPB**.  
+Permite detectar si una consulta hecha por un alumno corresponde a información **pública** o **privada**.  
+Cuando la información es privada, en vez de enviarla directamente, el sistema genera un **token de acceso único** que el alumno deberá validar en la plataforma web ingresando también su identidad (CI o correo). Una vez verificado, podrá acceder a la información protegida.
 
 ---
 
-## Requisitos
+## 🚀 Requisitos previos
 
 Antes de instalar y correr el proyecto, asegúrate de tener:
 
-- XAMPP con PHP 8.2 o superior y MySQL/MariaDB.  
-- Composer instalado en tu máquina (para manejar dependencias de Laravel).  
-- Git instalado (para clonar el repositorio si es necesario).  
-- Postman (opcional, para probar las APIs).  
-- Editor de texto recomendado: Visual Studio Code.
+- **XAMPP** con PHP ≥ 8.2 y MySQL/MariaDB  
+- **Composer** instalado (dependencias de Laravel)  
+- **Git** (para clonar el repositorio)  
+- **Postman** (opcional, para probar APIs)  
+- Editor de texto recomendado: **Visual Studio Code**  
 
-Extensiones de PHP necesarias (normalmente XAMPP ya las trae):  
-- openssl  
-- pdo_mysql  
-- mbstring  
-- tokenizer  
-- xml  
-- ctype  
-- json  
+Extensiones PHP necesarias (XAMPP normalmente ya las incluye):
 
----
-
-## Instalación
-
-1. Ir a la carpeta de XAMPP donde se guardan los proyectos web:
-   ```bash
-   cd C:\xampp\htdocs
-````
-
-2. Clonar el repositorio o copiar el proyecto dentro de `htdocs`.
-   Ejemplo si usas git:
-
-   ```bash
-   git clone <repo> upbot
-   cd upbot
-   ```
-
-3. Instalar dependencias con Composer:
-
-   ```bash
-   composer install
-   ```
-
-4. Copiar el archivo de configuración de entorno:
-
-   ```bash
-   copy .env.example .env
-   ```
-
-5. Editar el archivo `.env` con la configuración de tu base de datos y claves.
-   Ejemplo mínimo:
-
-   ```
-   APP_ENV=local
-   APP_DEBUG=true
-   APP_URL=http://localhost
-
-   DB_CONNECTION=mysql
-   DB_HOST=127.0.0.1
-   DB_PORT=3306
-   DB_DATABASE=upbot
-   DB_USERNAME=root
-   DB_PASSWORD=#tu clave
-
-   SESSION_DRIVER=database
-
-   MAIL_MAILER=log
-   UPBOT_API_KEY=supersecreto
-   ```
-
-6. Generar la clave de la aplicación:
-
-   ```bash
-   php artisan key:generate
-   ```
-
-7. Ejecutar las migraciones y seeders para crear la base de datos con datos de ejemplo:
-
-   ```bash
-   php artisan migrate --seed
-   ```
+- `openssl`  
+- `pdo_mysql`  
+- `mbstring`  
+- `tokenizer`  
+- `xml`  
+- `ctype`  
+- `json`  
 
 ---
 
-## Usuarios de prueba
+## ⚙️ Instalación
 
-El sistema incluye un alumno de prueba para hacer las primeras pruebas:
+1. Abrir la carpeta `htdocs` de XAMPP:  
 
-* Correo: `alumno1@upb.edu`
-* Contraseña: `password123`
-* CI: `12345678`
+cd C:\xampp\htdocs
+
+text
+
+2. Clonar el repositorio:  
+
+git clone <repo> upbot
+cd upbot
+
+text
+
+3. Instalar dependencias de Laravel con **Composer**:  
+
+composer install
+
+text
+
+4. Copiar el archivo de entorno:  
+
+copy .env.example .env
+
+text
+
+5. Configurar `.env` con tus credenciales de base de datos y claves mínimas:  
+
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://localhost
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=upbot
+DB_USERNAME=root
+DB_PASSWORD=tu_clave
+
+SESSION_DRIVER=database
+MAIL_MAILER=log
+
+UPBOT_API_KEY=supersecreto
+
+text
+
+6. Generar la clave de la aplicación:  
+
+php artisan key:generate
+
+text
+
+7. Ejecutar migraciones y seeders:  
+
+php artisan migrate --seed
+
+text
 
 ---
 
-## Flujo básico del sistema
+## 👤 Usuarios de prueba
 
-1. El bot (n8n) recibe una consulta del alumno.
-2. Si la información es sensible, el bot solicita al backend generar un **token de acceso**.
-3. El backend crea el token y lo devuelve.
-4. El bot le responde al alumno con un mensaje del tipo:
-   “Tu información está lista, por favor entra a la página con el siguiente código: XZ91-K3LM”.
-5. El alumno va al sitio web (`/token`), ingresa el código y verifica su identidad (con CI o email).
-6. Si todo es correcto, el sistema muestra el documento o la información protegida.
+El sistema incluye un usuario demo:
+
+- **Correo:** `alumno1@upb.edu`  
+- **Contraseña:** `password123`  
+- **CI:** `12345678`  
 
 ---
 
-## Rutas principales
+## 🔑 Flujo básico
+
+1. El bot (**n8n**) recibe una consulta de un alumno.  
+2. Si la info es **pública**, la devuelve directamente.  
+3. Si es **privada**, el backend genera un **token único** y lo envía al bot.  
+4. El alumno recibe un mensaje como:  
+> “Tu información está lista. Ingresa este código en la web: `XZ91-K3LM`”  
+5. El alumno entra a [`/token`](http://localhost/token), ingresa el código y verifica identidad.  
+6. Si todo es correcto → se muestra la información protegida.  
+
+---
+
+## 🌐 Rutas principales
 
 ### Web
-
-* `/login` → acceso con correo institucional (@upb.edu).
-* `/token` → formulario para ingresar código de acceso.
-* `/verify` → formulario para verificar identidad.
-* `/response/{payload}` → muestra la información protegida.
+- `/login` → acceso con correo institucional `@upb.edu`  
+- `/token` → ingreso del código de acceso  
+- `/verify` → verificación de identidad  
+- `/response/{payload}` → muestra información protegida  
 
 ### API
-
-* `/api/interactions` → registra la interacción (n8n).
-* `/api/public-response` → genera respuesta pública.
-* `/api/private-response` → genera respuesta privada con token.
-
----
-
-## Seguridad
-
-* Solo se permite acceso web a correos institucionales (`@upb.edu`).
-* La API está protegida con un API Key (`Authorization: Bearer supersecreto`).
-* Los tokens de acceso tienen expiración y se guardan encriptados.
-* Se agregó límite de intentos en `/token/verify`: máximo 10 por minuto.
-* Los documentos privados deben guardarse en `storage/app/protected` y nunca en la carpeta pública.
+- `POST /api/interactions` → registra una interacción (usado por **n8n**)  
+- `POST /api/public-response` → respuesta pública  
+- `POST /api/private-response` → respuesta privada con token  
 
 ---
 
-## Cómo probar el sistema
+## 🔒 Seguridad
 
-1. Generar un token de prueba:
+- Acceso solo a correos `@upb.edu`  
+- API protegida con **API Key** en el header:  
 
-   ```bash
-   php artisan upbot:test-token
-   ```
+Authorization: Bearer supersecreto
 
-   Esto devolverá un código como `ABCD-1234`.
+text
 
-2. Entrar al navegador en `http://localhost/login` con el usuario demo (`alumno1@upb.edu` / `password123`).
-
-3. Ir a `/token` e ingresar el código.
-
-4. Luego ingresar el CI (`12345678`).
-
-5. Si todo es correcto, se mostrará la información protegida.
+- Los tokens:
+- tienen **expiración**  
+- se guardan **encriptados**  
+- Límite de intentos en `/token/verify`: **10/minuto**  
+- Documentos privados se almacenan en `storage/app/protected` (nunca en público).  
 
 ---
 
-## Próximos pasos recomendados
+## 🧪 Cómo probar
 
-* Agregar rate limiting a todas las rutas del API (`/api`).
-* Habilitar la descarga segura de PDFs en las vistas.
-* Añadir validaciones más estrictas en los controladores de API.
-* Registrar acciones importantes en la tabla de auditoría (ejemplo: cuando alguien redime un token o descarga un documento).
-* Implementar OTP por correo como doble factor de seguridad.
+1. Generar un token de prueba:  
 
----
+php artisan upbot:test-token
 
-## Comandos útiles
+text
 
-* Refrescar autoload y caches:
+Ejemplo: `ABCD-1234`  
 
-  ```bash
-  composer dump-autoload
-  php artisan optimize:clear
-  ```
+2. Entrar en navegador a:  
+[http://localhost/login](http://localhost/login)  
+Usuario demo: `alumno1@upb.edu / password123`  
 
-* Migrar desde cero:
-
-  ```bash
-  php artisan migrate:fresh --seed
-  ```
-
-* Generar token de prueba:
-
-  ```bash
-  php artisan upbot:test-token
-  ```
+3. Ir a `/token`, ingresar el código generado.  
+4. Verificar con CI: `12345678`.  
+5. Ver información protegida ✅  
 
 ---
 
-Este backend ya está **listo para demo**. Lo que queda pendiente son capas adicionales de seguridad y pruebas con Postman/navegador para asegurarse de que todo funciona correctamente.
+## 📌 Próximos pasos recomendados
+
+- [ ] Agregar **rate limiting** en todas las rutas API  
+- [ ] Activar descarga segura de **PDFs**  
+- [ ] Añadir validaciones estrictas en los controladores  
+- [ ] Guardar logs en la tabla de **auditoría**  
+- [ ] Implementar **OTP por correo como segundo factor**  
+
+---
+
+## 🛠️ Comandos útiles
+
+- Refrescar autoload y caches:  
+
+composer dump-autoload
+php artisan optimize:clear
+
+text
+
+- Migrar desde cero:  
+
+php artisan migrate:fresh --seed
+
+text
+
+- Generar token de prueba:  
+
+php artisan upbot:test-token
+
+text
+
+---
+
+## 📖 Estado del proyecto
+
+✅ Listo para **demo**.  
+⚡ Faltan capas adicionales de seguridad y pruebas en Postman/navegador.  
