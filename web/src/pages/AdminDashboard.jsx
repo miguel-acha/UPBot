@@ -1,23 +1,43 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
 import api from "../api/client";
 import Topbar from "../components/Topbar";
 
 export default function AdminDashboard() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [ci, setCi] = useState("");
   const [password, setPassword] = useState("UPB-2025");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [ok, setOk] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
+  const [successText, setSuccessText] = useState("Usuario creado correctamente.");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validar que el email termine en @upb.edu
-    if (!email.trim().toLowerCase().endsWith('@upb.edu')) {
+
+    const emailNorm = email.trim().toLowerCase();
+    const nameNorm = name.trim();
+    const ciNorm = ci.trim();
+    const pwd = String(password || "").trim();
+
+    if (!emailNorm.endsWith("@upb.edu")) {
       setError("El correo debe terminar en @upb.edu");
+      setShowNotification(true);
+      return;
+    }
+    if (!nameNorm) {
+      setError("El nombre es obligatorio");
+      setShowNotification(true);
+      return;
+    }
+    if (!ciNorm) {
+      setError("El Carnet de Identidad es obligatorio");
+      setShowNotification(true);
+      return;
+    }
+    if (pwd.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres");
       setShowNotification(true);
       return;
     }
@@ -26,18 +46,22 @@ export default function AdminDashboard() {
     setOk(false);
     setLoading(true);
     try {
-      await api.post("/users", {
-        email,
-        name,
-        password,
-        password_confirmation: password,
-        role: "student",
-        is_active: 1
+      const { data } = await api.post("/admin/student-user", {
+        email: emailNorm,
+        name: nameNorm,
+        password: pwd,
+        student: {
+          full_name: nameNorm,
+          ci: ciNorm,
+        },
       });
+
       setOk(true);
+      setSuccessText(data?.message || "Usuario creado correctamente.");
       setShowNotification(true);
       setEmail("");
       setName("");
+      setCi("");
       setPassword("UPB-2025");
     } catch (err) {
       const errorMsg =
@@ -75,8 +99,8 @@ export default function AdminDashboard() {
   return (
     <>
       <Topbar />
-      
-      {/* Toast Notification - Alineado con topbar */}
+
+      {/* Toast Notification */}
       {showNotification && (error || ok) && (
         <div
           style={{
@@ -86,22 +110,24 @@ export default function AdminDashboard() {
             zIndex: 1000,
             minWidth: "340px",
             maxWidth: "400px",
-            background: error 
+            background: error
               ? "linear-gradient(135deg, #ff4757 0%, #ff3838 100%)"
               : "linear-gradient(135deg, #2ed573 0%, #1dd1a1 100%)",
             color: "#fff",
             padding: "18px 22px",
             borderRadius: "12px",
-            boxShadow: "0 10px 40px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.15)",
-            animation: "slideInRight 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards",
+            boxShadow:
+              "0 10px 40px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.15)",
+            animation:
+              "slideInRight 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards",
             display: "flex",
             alignItems: "center",
             gap: "14px",
-            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-            border: "1px solid rgba(255,255,255,0.1)"
+            fontFamily:
+              "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            border: "1px solid rgba(255,255,255,0.1)",
           }}
         >
-          {/* Icono */}
           <div style={{ flexShrink: 0 }}>
             {error ? (
               <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -113,26 +139,14 @@ export default function AdminDashboard() {
               </svg>
             )}
           </div>
-          
-          {/* Contenido */}
           <div style={{ flex: 1 }}>
-            <div style={{ 
-              fontWeight: "700", 
-              fontSize: "15px", 
-              marginBottom: "3px"
-            }}>
+            <div style={{ fontWeight: "700", fontSize: "15px", marginBottom: "3px" }}>
               {error ? "Error" : "¡Éxito!"}
             </div>
-            <div style={{ 
-              fontSize: "13px", 
-              opacity: "0.95",
-              lineHeight: "1.5"
-            }}>
-              {error || "Usuario creado correctamente."}
+            <div style={{ fontSize: "13px", opacity: "0.95", lineHeight: "1.5" }}>
+              {error || successText}
             </div>
           </div>
-          
-          {/* Botón cerrar */}
           <button
             onClick={closeNotification}
             style={{
@@ -146,20 +160,11 @@ export default function AdminDashboard() {
               alignItems: "center",
               justifyContent: "center",
               transition: "all 0.2s ease",
-              opacity: "0.8"
+              opacity: "0.8",
             }}
-            onMouseOver={(e) => {
-              e.target.style.background = "rgba(255,255,255,0.25)";
-              e.target.style.opacity = "1";
-            }}
-            onMouseOut={(e) => {
-              e.target.style.background = "rgba(255,255,255,0.15)";
-              e.target.style.opacity = "0.8";
-            }}
+            aria-label="Cerrar notificación"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-            </svg>
+            ✕
           </button>
         </div>
       )}
@@ -172,50 +177,75 @@ export default function AdminDashboard() {
           <p className="small muted" style={{ textAlign: "center", marginTop: 0 }}>
             Crear nuevo usuario con correo <span className="strong">@upb.edu</span>
           </p>
+
           <form className="form" onSubmit={handleSubmit} autoComplete="off">
             <div>
               <label className="label" htmlFor="email">Correo</label>
               <div className="field">
                 <span className="icon-left" aria-hidden>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4-8 5L4 8V6l8 5 8-5v2Z"/>
                   </svg>
                 </span>
                 <input
                   id="email"
                   type="email"
-                  inputMode="email"
                   placeholder="usuario@upb.edu"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
             </div>
-            <div>
-              <label className="label" htmlFor="name">Nombre</label>
-              <div className="field">
-                <span className="icon-left" aria-hidden>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 4V6C15 7.1 14.1 8 13 8H11C9.9 8 9 7.1 9 6V4L3 7V9H21ZM12 17.5L16.5 13H7.5L12 17.5Z"/>
-                  </svg>
-                </span>
-                <input
-                  id="name"
-                  type="text"
-                  placeholder="Nombre completo"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
+
+            {/* Campo Nombre */}
+<div>
+  <label className="label" htmlFor="name">Nombre</label>
+  <div className="field">
+    <span className="icon-left" aria-hidden>
+      {/* 👤 Ícono usuario */}
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/>
+      </svg>
+    </span>
+    <input
+      id="name"
+      type="text"
+      placeholder="Nombre completo"
+      value={name}
+      onChange={(e) => setName(e.target.value)}
+      required
+    />
+  </div>
+</div>
+
+{/* Campo CI */}
+<div>
+  <label className="label" htmlFor="ci">Carnet de Identidad</label>
+  <div className="field">
+    <span className="icon-left" aria-hidden>
+      {/* 🪪 Ícono tarjeta */}
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zM6 10h5v2H6v-2z"/>
+      </svg>
+    </span>
+    <input
+      id="ci"
+      type="text"
+      placeholder="0000000 SC"
+      value={ci}
+      onChange={(e) => setCi(e.target.value)}
+      required
+    />
+  </div>
+</div>
+
             <div>
               <label className="label" htmlFor="password">Contraseña inicial</label>
               <div className="field">
                 <span className="icon-left" aria-hidden>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17 8h-1V6a4 4 0 1 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2Zm-8-2a3 3 0 1 1 6 0v2H9V6Zm8 12H7v-8h10v8Z"/>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 8h-1V6a4 4 0 1 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2Z"/>
                   </svg>
                 </span>
                 <input
@@ -223,11 +253,12 @@ export default function AdminDashboard() {
                   type="text"
                   placeholder="UPB-2025"
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   required
                 />
               </div>
             </div>
+
             <button className="btn btn-primary" type="submit" disabled={loading}>
               {loading ? "Creando..." : "Crear usuario"}
             </button>

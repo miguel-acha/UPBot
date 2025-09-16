@@ -5,8 +5,9 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\InfoController;
 use App\Http\Controllers\InteractionController;
-// Si implementaste la creación conjunta Student+User, descomenta la siguiente línea y la ruta más abajo
-// use App\Http\Controllers\Admin\StudentUserController;
+use App\Http\Controllers\LookupController;
+// 👇 CORREGIDO: tu controlador NO está en Admin
+use App\Http\Controllers\StudentUserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -35,7 +36,7 @@ Route::middleware(['auth:sanctum', 'force.password.change'])->group(function () 
     Route::post('/users', [UserController::class, 'adminCreate'])
         ->middleware('ability:admin');
 
-    // (Opcional) SOLO ADMIN: crear Student + User en una sola transacción
+    // (Opcional) SOLO ADMIN: crear Student + User en una sola transacción (versión anterior comentada)
     // Route::post('/admin/students-with-user', [StudentUserController::class, 'store'])
     //     ->middleware('ability:admin');
 
@@ -60,3 +61,17 @@ Route::post('/interactions', [InteractionController::class, 'store'])
 Route::get('/user', function (\Illuminate\Http\Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+
+// Lookups autorizados
+Route::middleware(['auth:sanctum', 'ability:n8n:read,admin'])->group(function () {
+    // GET con query param ?email=
+    Route::get('/lookup/user-id', [LookupController::class, 'userIdByEmail']);
+
+    // (opcional) POST con JSON {"email": "..."}
+    Route::post('/lookup/user-id', [LookupController::class, 'userIdByEmail']);
+});
+
+// 👇 Ruta oficial para crear Student + User
+Route::middleware(['auth:sanctum', 'ability:admin'])->group(function () {
+    Route::post('/admin/student-user', [StudentUserController::class, 'store']);
+});

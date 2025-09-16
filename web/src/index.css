@@ -34,6 +34,7 @@ body{
     radial-gradient(1200px 800px at 80% -10%, rgba(110,123,255,.18), transparent 60%),
     radial-gradient(900px 700px at -10% 10%, rgba(110,123,255,.14), transparent 60%),
     var(--bg);
+  background-repeat: no-repeat;
 }
 
 /* ===== Helpers ===== */
@@ -100,11 +101,16 @@ body{
 .form { display: grid; gap: 14px; }
 .label { display: block; margin: 2px 0 6px; font-size: 13px; color:#94a3b8; }
 
-/* === Field (segura, no colisiona con otros .input globales) === */
+/* === Field (ícono centrado + padding seguro) === */
 .field{ position:relative; display:block; width:100%; }
+.field .icon-left{
+  position:absolute; left:12px; top:50%; transform:translateY(-50%);
+  color:#7b89a8; pointer-events:none;
+  display:flex; align-items:center; justify-content:center;
+}
 .field input{
   display:block; width:100%; height:44px;
-  padding:0 40px;  /* espacio para icono y botón */
+  padding:0 14px 0 40px;  /* espacio para ícono a la izquierda */
   border-radius:12px; outline:none;
   background:#121a2b; color:#e6ecff;
   border:1px solid #1f2943;
@@ -112,9 +118,8 @@ body{
 }
 .field input::placeholder{ color:#8b99b1; }
 .field input:focus{ border-color:#3a57ff; box-shadow:0 0 0 3px rgba(58,87,255,.25); }
-.field .icon-left{
-  position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#7b89a8;
-}
+
+/* Botones auxiliares dentro del field (ej. ojo password) */
 .field .eye-btn{
   position:absolute; right:8px; top:50%; transform:translateY(-50%);
 }
@@ -156,29 +161,8 @@ body{
 .login-card .form { width: 100%; }
 .login-card .field { width: 100%; }
 
-/* === Espaciado cómodo para loading y lista final === */
-.stack-24 { display: grid; gap: 24px; }
-
-/* la lista por defecto tenía gap 10; aquí fuerzas más aire cuando uses gap-lg */
-.list.gap-lg { gap: 24px; }
-
-/* skeletons algo más altos para que no "aplasten" el layout al aparecer */
-.card.skeleton.h96 { min-height: 96px; }
-
-.btn, .btn:link, .btn:visited {
-  text-decoration: none !important;
-}
-
 /* Animación para el toast */
 @keyframes slideInRight {
-  from {
-    transform: translateX(120%);
-    opacity: 0;
-    scale: 0.9;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-    scale: 1;
-  }
+  from { transform: translateX(120%); opacity: 0; scale: 0.9; }
+  to   { transform: translateX(0);    opacity: 1; scale: 1;   }
 }
