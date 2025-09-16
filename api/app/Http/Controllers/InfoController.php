@@ -3,20 +3,17 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use App\Models\Student;
 use App\Models\AcademicDocument;
 use App\Models\ResponsePayload;
 
 class InfoController extends Controller
 {
-    /**
-     * n8n consulta constancia (no retorna datos si es privada).
-     * GET /api/students/{student}/constancia?semester=2025-2
-     */
-    public function constancia(Request $request, Student $student)
+    public function constancia(Request $request, Student $student): JsonResponse
     {
         $user = $request->user();
-        // Admin o token de sistema con ability n8n:read
         if (!($user && (($user->role ?? null) === 'admin' || $request->user()->tokenCan('n8n:read')))) {
             abort(403);
         }
@@ -32,49 +29,85 @@ class InfoController extends Controller
             return response()->json(['found' => false], 404);
         }
 
-        // Regla: constancia es sensible → n8n no ve datos
         return response()->json([
             'found'     => true,
             'sensitive' => true,
-            'message'   => 'Disponible en el portal del alumno'
+            'message'   => 'Disponible en el portal del alumno',
         ]);
     }
 
     /**
-     * Portal: listar mis responses (paginado)
      * GET /api/my/responses
+     * Coincide por student_id del user o por email institucional del student.
+     * Además hace backfill de users.student_id si puede inferirlo por email.
      */
-    public function myResponses(Request $request)
+    public function myResponses(Request $request): JsonResponse
     {
-        $sid = $request->user()->student_id;
-        abort_unless($sid, 403);
+        $u = $request->user();
 
-        $items = ResponsePayload::with('interaction')
-            ->where('student_id', $sid)
-            ->orderByDesc('id')
-            ->paginate(20);
+        // Resolver student_id (o inferir por email institucional)
+        $sid = $u->student_id;
+        if (!$sid) {
+            $sid = Student::where('email_institucional', $u->email)->value('id');
+            if ($sid) {
+                try {
+                    DB::table('users')->where('id', $u->id)->update(['student_id' => $sid]);
+                    $u->student_id = $sid;
+                } catch (\Throwable $e) {
+                    // no crítico
+                }
+            }
+        }
+
+        $q = ResponsePayload::query()
+            ->with(['interaction','student'])
+            ->where(function ($w) use ($sid, $u) {
+                if ($sid) {
+                    $w->orWhere('student_id', $sid);
+                }
+                $w->orWhereHas('student', function ($qs) use ($u) {
+                    $qs->where('email_institucional', $u->email);
+                });
+            })
+            ->orderByDesc('id');
+
+        // 🔑 usamos sensitivity_level y (si quieres) lo exponemos como 'sensitivity' con alias
+        $items = $q->paginate(20, [
+            'id',
+            'interaction_id',
+            'student_id',
+            'payload_type',
+            'academic_document_id',
+            'summary',
+            DB::raw('sensitivity_level as sensitivity'),
+            'created_at',
+        ]);
 
         return response()->json($items);
     }
 
     /**
-     * Portal: ver un response propio (o admin)
      * GET /api/my/responses/{payload}
      */
-    public function showResponse(Request $request, ResponsePayload $payload)
+    public function showResponse(Request $request, ResponsePayload $payload): JsonResponse
     {
         $u = $request->user();
-        $isOwner = $u->student_id && $u->student_id === $payload->student_id;
-        $isAdmin = ($u->role ?? null) === 'admin';
 
-        abort_unless($isOwner || $isAdmin, 403);
+        $isOwnerById = ($u->student_id && $u->student_id === $payload->student_id);
+        $payloadStudentEmail = optional($payload->student)->email_institucional;
+        $isOwnerByEmail = $payloadStudentEmail && strcasecmp($payloadStudentEmail, $u->email) === 0;
+        $isAdmin = (($u->role ?? null) === 'admin');
+
+        abort_unless($isOwnerById || $isOwnerByEmail || $isAdmin, 403);
 
         return response()->json([
             'id'          => $payload->id,
             'type'        => $payload->payload_type,
             'summary'     => $payload->summary,
+            'sensitivity' => $payload->sensitivity_level, // 👈 leemos la columna real
             'data'        => $payload->data_json_enc ? json_decode($payload->data_json_enc, true) : null,
             'document_id' => $payload->academic_document_id,
+            'created_at'  => $payload->created_at,
         ]);
     }
 }

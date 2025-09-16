@@ -22,23 +22,19 @@ Route::post('/login', [UserController::class, 'login']);
 // Si lo mantienes, al menos queda comentado:
 // Route::post('/created', [UserController::class, 'created']);
 
-// ----- Rutas protegidas con Sanctum + bloqueo por cambio de contraseña -----
-Route::middleware(['auth:sanctum', 'force.password.change'])->group(function () {
+// ----- Rutas protegidas con Sanctum (SIN forzar cambio de contraseña por ahora) -----
+Route::middleware(['auth:sanctum'])->group(function () {
 
     // Perfil actual (para el portal)
     Route::get('/me', [MeController::class, 'show']);
 
-    // Cambiar contraseña (obligatorio tras primer login si must_change_password = true)
+    // Cambiar contraseña (ahora es opcional)
     Route::post('/me/password', [UserController::class, 'changePassword']);
 
     // SOLO ADMIN: crear usuarios (si quieres mantener creación desde API)
     // Requiere que el token tenga la ability "admin"
     Route::post('/users', [UserController::class, 'adminCreate'])
         ->middleware('ability:admin');
-
-    // (Opcional) SOLO ADMIN: crear Student + User en una sola transacción (versión anterior comentada)
-    // Route::post('/admin/students-with-user', [StudentUserController::class, 'store'])
-    //     ->middleware('ability:admin');
 
     // Portal: mis respuestas (alumno autenticado)
     Route::get('/my/responses', [InfoController::class, 'myResponses']);
@@ -49,7 +45,6 @@ Route::middleware(['auth:sanctum', 'force.password.change'])->group(function () 
 // Requiere ability n8n:read o admin
 Route::middleware(['auth:sanctum', 'ability:n8n:read,admin'])->group(function () {
     Route::get('/students/{student}/constancia', [InfoController::class, 'constancia']);
-    // Aquí puedes añadir otras consultas: saldo, historial, etc.
 });
 
 // n8n: registrar consulta/bitácora (trazabilidad)
@@ -74,4 +69,8 @@ Route::middleware(['auth:sanctum', 'ability:n8n:read,admin'])->group(function ()
 // 👇 Ruta oficial para crear Student + User
 Route::middleware(['auth:sanctum', 'ability:admin'])->group(function () {
     Route::post('/admin/student-user', [StudentUserController::class, 'store']);
+});
+
+Route::middleware(['auth:sanctum', 'force.password.change'])->group(function () {
+    Route::get('/my/responses/{payload}/enriched', [\App\Http\Controllers\ResponseEnricherController::class, 'show']);
 });

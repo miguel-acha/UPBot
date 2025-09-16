@@ -134,6 +134,7 @@ body{
   border:0; border-radius:12px; cursor:pointer; padding:0 16px;
   color:#fff; background:linear-gradient(180deg,#141a28,#0e1420);
   transition:transform .12s, box-shadow .18s, filter .18s, background .18s;
+  text-decoration: none !important;
 }
 .btn:active{ transform:translateY(1px) scale(.995); }
 .btn-primary{
@@ -148,21 +149,79 @@ body{
   padding:10px 12px; border-radius:10px; font-size:.9rem; margin-bottom:8px;
 }
 
-/* utilidades */
+/* ===== Lists / Skeletons / Cards ===== */
 .skeleton{ border-radius:12px; background:linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.12), rgba(255,255,255,.05)); background-size:200% 100%; animation:shimmer 1.2s infinite; }
 @keyframes shimmer{ from{ background-position:200% 0 } to{ background-position:-200% 0 } }
+
 .h48{ height:48px; } .h96{ height:96px; }
-.list{ list-style:none; padding:0; margin:0; display:grid; gap:10px; }
-.list-item{ display:flex; align-items:center; justify-content:space-between; }
+
+.list{ list-style:none; padding:0; margin:0; display:grid; gap:22px; }
+.list-item{ display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .list-content .title{ font-weight:600; }
-.json{ background:#0b1020; color:#cbd5e1; border:1px solid var(--border); padding:14px; border-radius:12px; overflow:auto; }
 
-/* Garantiza que el formulario del login ocupe el ancho del card */
-.login-card .form { width: 100%; }
-.login-card .field { width: 100%; }
+.loading-list{ display:grid; gap:22px; margin-top:8px; }
+.skel-card{
+  height:96px;
+  border-radius:14px;
+  background:linear-gradient(180deg,#181d2b,#121826);
+  border:1px solid #1f2943;
+  box-shadow:0 10px 28px rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.04);
+  position:relative;
+  overflow:hidden;
+}
+.skel-card::after{
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(90deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.12) 40%, rgba(255,255,255,.06) 80%);
+  transform:translateX(-100%);
+  animation:skel-shimmer 1.2s infinite;
+  opacity:.25;
+}
+@keyframes skel-shimmer{ to{ transform:translateX(100%); } }
 
-/* Animación para el toast */
-@keyframes slideInRight {
-  from { transform: translateX(120%); opacity: 0; scale: 0.9; }
-  to   { transform: translateX(0);    opacity: 1; scale: 1;   }
+.query-card{
+  padding:16px 18px;
+  border-radius:14px;
+  background:linear-gradient(180deg,#181d2b,#121826);
+  border:1px solid #1f2943;
+  box-shadow:0 10px 28px rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.04);
+}
+
+/* Link-botón para “Ver detalle” */
+.link-btn{
+  height:36px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 14px;
+  border-radius:10px;
+  border:1px solid #2a3350;
+  background:#0f1627;
+  color:#cfd8ff;
+  font-weight:600;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);
+  transition:filter .15s, background .15s, border-color .15s;
+  text-decoration:none;
+}
+.link-btn:hover{
+  background:#141d33;
+  border-color:#3a57ff;
+  color:#fff;
+  filter:brightness(1.05);
+}
+
+/* JSON block */
+.json{
+  background:#0b1020;
+  color:#cbd5e1;
+  border:1px solid var(--border);
+  padding:14px;
+  border-radius:12px;
+  overflow:auto;
+}
+
+/* === Animación entrada lista === */
+.list-appear{ animation:list-fade .22s ease-out both; }
+@keyframes list-fade{
+  from{ opacity:0; transform:translateY(6px); }
+  to  { opacity:1; transform:translateY(0); }
 }

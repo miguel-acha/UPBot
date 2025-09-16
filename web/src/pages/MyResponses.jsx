@@ -4,91 +4,157 @@ import api from "../api/client";
 import Topbar from "../components/Topbar";
 import { Link } from "react-router-dom";
 
+/** Normaliza lo que venga del backend a un array de items */
+function extractItems(payload) {
+  if (!payload) return [];
+  // 1) array directo
+  if (Array.isArray(payload)) return payload;
+
+  // 2) axios suele poner la data "tal cual"; intentos comunes:
+  //   { data: [...] } (paginator de Laravel)
+  if (Array.isArray(payload.data)) return payload.data;
+
+  // 3) { items: [...] }
+  if (Array.isArray(payload.items)) return payload.items;
+
+  // 4) { data: { data: [...] } }  (a veces APIs envuelven otra vez)
+  if (payload.data && Array.isArray(payload.data.data)) return payload.data.data;
+
+  // 5) { items: { data: [...] } }
+  if (payload.items && Array.isArray(payload.items.data)) return payload.items.data;
+
+  return [];
+}
+
 export default function MyResponses() {
-  const { token, logout } = useAuth();
+  const { token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
+  const [debugMsg, setDebugMsg] = useState("");
 
   useEffect(() => {
     let mounted = true;
+
     async function fetchData() {
       try {
         setLoading(true);
         setError("");
-        const { data } = await api.get("/my/responses");
+        setDebugMsg("");
+
+        const res = await api.get("/my/responses");
+        // axios: res.data es el cuerpo; guardo una copia para debug
+        // eslint-disable-next-line no-console
+        console.log("[/my/responses] raw:", res.data);
+
         if (!mounted) return;
-        if (Array.isArray(data)) {
-          setItems(data);
-        } else if (data && Array.isArray(data.items)) {
-          setItems(data.items);
-        } else if (data && Array.isArray(data.data)) {
-          setItems(data.data);
-        } else {
+
+        const arr = extractItems(res.data);
+
+        if (!Array.isArray(arr)) {
           setItems([]);
+          setDebugMsg("La API devolvió un formato inesperado. Revisa la consola del navegador.");
+        } else {
+          setItems(arr);
+          if (arr.length === 0) {
+            // Si el paginator viene vacío pero con metadatos, avisa algo útil
+            const hasPaginationMeta =
+              res?.data &&
+              (typeof res.data.current_page !== "undefined" ||
+                res?.data?.meta ||
+                res?.data?.links);
+            if (hasPaginationMeta) {
+              setDebugMsg("No hay resultados en esta página del paginador.");
+            }
+          }
         }
       } catch (err) {
         if (!mounted) return;
-        setError("No hay consultas para ver.");
+        // eslint-disable-next-line no-console
+        console.error("[/my/responses] error:", err?.response?.status, err?.response?.data || err);
+        const serverMsg =
+          err?.response?.data?.message ||
+          err?.message ||
+          "No hay consultas para ver.";
+        setError(serverMsg);
       } finally {
         if (mounted) setLoading(false);
       }
     }
+
     if (token) {
       fetchData();
     } else {
       setLoading(false);
     }
-    return () => { mounted = false; };
+
+    return () => {
+      mounted = false;
+    };
   }, [token]);
 
   return (
     <>
       <Topbar />
       <main className="container" style={{ paddingTop: 18, paddingBottom: 40 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h1 className="h1" style={{ marginBottom: 18 }}>Mis Consultas</h1>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h1 className="h1" style={{ marginBottom: 18 }}>
+            Mis Consultas
+          </h1>
         </div>
+
+        {/* Estado de carga con skeletons */}
         {loading && (
-          <div className="stack-24">
-            <div className="card skeleton h96" />
-            <div className="card skeleton h96" />
-            <div className="card skeleton h96" />
+          <div className="loading-list">
+            <div className="skel-card" />
+            <div className="skel-card" />
+            <div className="skel-card" />
           </div>
         )}
-        {!loading && error && (
-          <div className="error">{error}</div>
+
+        {!loading && error && <div className="error">{error}</div>}
+
+        {!loading && !error && debugMsg && (
+          <p className="small muted" style={{ marginTop: 8 }}>{debugMsg}</p>
         )}
-        {!loading && !error && items.length === 0 && (
+
+        {!loading && !error && items.length === 0 && !debugMsg && (
           <p className="muted">Aún no tienes consultas registradas.</p>
         )}
+
         {!loading && !error && items.length > 0 && (
-          <ul className="list gap-lg">
-            {items.map((it, index) => (
-              <li key={it.id ?? `${it.payload_type}-${it.created_at}-${index}`}>
-                <div className="card hoverable">
-                  <div
-                    className="list-item"
-                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                  >
+          <ul className="list list-appear">
+            {items.map((it, index) => {
+              const id = it.id ?? it.payload_id ?? it.interaction_id ?? index;
+              const title = it.summary ?? it.title ?? "Consulta";
+              const type = it.payload_type ?? it.type ?? "json_data";
+              const created =
+                it.created_at ?? it.createdAt ?? it.created ?? Date.now();
+
+              return (
+                <li key={id} className="query-card">
+                  <div className="list-item">
                     <div className="list-content">
-                      <div className="title">{it.summary ?? it.title ?? "Consulta"}</div>
+                      <div className="title">{title}</div>
                       <div className="small muted">
-                        {it.payload_type ?? it.type ?? "json_data"}
+                        {type}
                         <span className="sep"> · </span>
-                        {new Date(it.created_at ?? it.createdAt ?? Date.now()).toLocaleString()}
+                        {new Date(created).toLocaleString()}
                       </div>
                     </div>
-                    <Link
-                    className="btn"
-                    to={`/mis-consultas/${it.id}`}
-                    >
-                    Ver detalle
+                    <Link className="link-btn" to={`/mis-consultas/${id}`}>
+                      Ver detalle
                     </Link>
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </main>
