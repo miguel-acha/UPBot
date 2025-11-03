@@ -7,27 +7,16 @@ import { Link } from "react-router-dom";
 /** Normaliza lo que venga del backend a un array de items */
 function extractItems(payload) {
   if (!payload) return [];
-  // 1) array directo
   if (Array.isArray(payload)) return payload;
-
-  // 2) axios suele poner la data "tal cual"; intentos comunes:
-  //   { data: [...] } (paginator de Laravel)
   if (Array.isArray(payload.data)) return payload.data;
-
-  // 3) { items: [...] }
   if (Array.isArray(payload.items)) return payload.items;
-
-  // 4) { data: { data: [...] } }  (a veces APIs envuelven otra vez)
   if (payload.data && Array.isArray(payload.data.data)) return payload.data.data;
-
-  // 5) { items: { data: [...] } }
   if (payload.items && Array.isArray(payload.items.data)) return payload.items.data;
-
   return [];
 }
 
 export default function MyResponses() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
@@ -43,8 +32,6 @@ export default function MyResponses() {
         setDebugMsg("");
 
         const res = await api.get("/my/responses");
-        // axios: res.data es el cuerpo; guardo una copia para debug
-        // eslint-disable-next-line no-console
         console.log("[/my/responses] raw:", res.data);
 
         if (!mounted) return;
@@ -57,7 +44,6 @@ export default function MyResponses() {
         } else {
           setItems(arr);
           if (arr.length === 0) {
-            // Si el paginator viene vacío pero con metadatos, avisa algo útil
             const hasPaginationMeta =
               res?.data &&
               (typeof res.data.current_page !== "undefined" ||
@@ -70,7 +56,6 @@ export default function MyResponses() {
         }
       } catch (err) {
         if (!mounted) return;
-        // eslint-disable-next-line no-console
         console.error("[/my/responses] error:", err?.response?.status, err?.response?.data || err);
         const serverMsg =
           err?.response?.data?.message ||
@@ -82,16 +67,17 @@ export default function MyResponses() {
       }
     }
 
-    if (token) {
+    if (token && user?.role === "student") {
       fetchData();
     } else {
       setLoading(false);
+      setDebugMsg("Este panel solo está disponible para estudiantes.");
     }
 
     return () => {
       mounted = false;
     };
-  }, [token]);
+  }, [token, user]);
 
   return (
     <>
@@ -109,7 +95,6 @@ export default function MyResponses() {
           </h1>
         </div>
 
-        {/* Estado de carga con skeletons */}
         {loading && (
           <div className="loading-list">
             <div className="skel-card" />

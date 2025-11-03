@@ -14,9 +14,6 @@ class UserController extends Controller
 {
     /**
      * Iniciar sesión (Sanctum).
-     * - Valida credenciales.
-     * - Bloquea si is_active = false.
-     * - Devuelve token con abilities según rol.
      */
     public function login(Request $request): JsonResponse
     {
@@ -32,7 +29,6 @@ class UserController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Bloquear usuarios inactivos aunque las credenciales sean correctas
         if (! ($user->is_active ?? true)) {
             Auth::logout();
             return response()->json(['message' => 'Usuario inactivo. Contacte al administrador.'], 403);
@@ -42,11 +38,7 @@ class UserController extends Controller
     }
 
     /**
-     * ⚠️ Registro público (desaconsejado en prod).
-     * Si decides mantenerla, se fuerza:
-     *  - email @upb.edu
-     *  - must_change_password = true
-     *  - is_active = true
+     * Registro público (desaconsejado en producción).
      */
     public function created(Request $request): JsonResponse
     {
@@ -66,16 +58,14 @@ class UserController extends Controller
             'password'             => Hash::make($request->password),
             'role'                 => 'student',
             'is_active'            => true,
-            'must_change_password' => true, // obliga a cambiar al primer login
+            'must_change_password' => true,
         ]);
 
         return $this->generateTokenResponse($user, 'Usuario registrado correctamente');
     }
 
     /**
-     * ✅ Creación SOLO ADMIN (Bearer token con ability: admin).
-     * Crea usuario (opcionalmente asociándolo a students via student_id)
-     * y lo obliga a cambiar contraseña al primer login si es student.
+     * Creación por parte del admin.
      */
     public function adminCreate(Request $request): JsonResponse
     {
@@ -87,7 +77,7 @@ class UserController extends Controller
                 Rule::unique('users','email'),
             ],
             'password'   => ['required','string','min:8'],
-            'role'       => ['required', Rule::in(['student','admin'])],
+            'role'       => ['required', Rule::in(['student','admin','teacher','head_of_program'])],
             'student_id' => ['nullable','exists:students,id'],
             'is_active'  => ['nullable','boolean'],
         ]);
@@ -98,7 +88,7 @@ class UserController extends Controller
             'password'             => Hash::make($data['password']),
             'role'                 => $data['role'],
             'is_active'            => array_key_exists('is_active', $data) ? (bool)$data['is_active'] : true,
-            'must_change_password' => $data['role'] === 'student', // estudiantes cambian al primer login
+            'must_change_password' => $data['role'] === 'student',
             'student_id'           => $data['student_id'] ?? null,
         ]);
 
@@ -111,10 +101,7 @@ class UserController extends Controller
     }
 
     /**
-     * ✅ Cambio de contraseña por el propio usuario (logueado).
-     * - Verifica current_password
-     * - Evita repetir contraseña
-     * - Limpia flag must_change_password
+     * Cambio de contraseña por el propio usuario.
      */
     public function changePassword(Request $request): JsonResponse
     {
@@ -130,7 +117,6 @@ class UserController extends Controller
             return response()->json(['message' => 'La contraseña actual no es correcta'], 422);
         }
 
-        // Evita misma contraseña
         if (Hash::check($validated['new_password'], $user->password)) {
             return response()->json(['message' => 'La nueva contraseña no puede ser la misma que la actual'], 422);
         }
@@ -145,17 +131,13 @@ class UserController extends Controller
     }
 
     /**
-     * Respuesta estándar de login/registro con abilities por rol.
+     * Devuelve token con habilidades y perfil.
      */
     protected function generateTokenResponse(User $user, string $message): JsonResponse
     {
-        // Abilities por rol
         $abilities = [];
         if (($user->role ?? null) === 'admin') {
             $abilities = ['admin', 'n8n:read', 'n8n:log'];
-        } else {
-            // Estudiante u otros roles sin abilities especiales
-            $abilities = [];
         }
 
         $token = $user->createToken('auth-token', $abilities)->plainTextToken;
@@ -173,5 +155,15 @@ class UserController extends Controller
             ],
             'token' => $token,
         ]);
+    }
+
+    /**
+     * Listado de usuarios con sus roles.
+     */
+    public function index(): JsonResponse
+    {
+        return response()->json(
+            User::select('id', 'name', 'email', 'role')->get()
+        );
     }
 }

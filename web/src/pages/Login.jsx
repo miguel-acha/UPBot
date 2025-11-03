@@ -2,25 +2,34 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+const ROUTE_BY_ROLE = {
+  admin: "/admin",
+  head_of_program: "/jefe-carrera",
+  teacher: "/profesor",
+  student: "/mis-consultas",
+};
+
 export default function Login() {
   const navigate = useNavigate();
-  const { token, loading, login, user } = useAuth();
+  const { token, loading, login, user, meTried } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState("");
 
+  // Redirección por rol cuando ya tienes token + user
   useEffect(() => {
-    if (token && String(token).trim() && token !== "null" && token !== "undefined") {
-      // Redirigir según el tipo de usuario
-      if (user?.email === "admin@upb.edu") {
-        navigate("/admin", { replace: true });
-      } else {
-        navigate("/mis-consultas", { replace: true });
-      }
+    if (loading || !meTried) return;
+    if (!token || token === "null" || token === "undefined") return;
+    if (!user) return;
+
+    const role = String(user.role || user.roles?.[0] || "").toLowerCase();
+    const target = ROUTE_BY_ROLE[role] || "/mis-consultas";
+    if (window.location.pathname !== target) {
+      navigate(target, { replace: true });
     }
-  }, [token, navigate, user]);
+  }, [loading, meTried, token, user, navigate]);
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -29,9 +38,7 @@ export default function Login() {
     const { ok, message } = await login(email.trim(), password);
     if (!ok) {
       setError(message || "No se pudo iniciar sesión");
-      return;
     }
-    // La redirección se maneja en useEffect
   }
 
   return (

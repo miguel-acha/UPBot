@@ -9,7 +9,8 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem("user") || "null"); } catch { return null; }
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);   // cambia a true: cargamos auth inicial
+  const [meTried, setMeTried] = useState(false);  // sabemos si intentamos /me al menos una vez
 
   // ---- Inactividad ----
   const idleTimerRef = useRef(null);
@@ -39,6 +40,7 @@ export function AuthProvider({ children }) {
     startIdleTimer();
   }
 
+  // Attach listeners solo si hay token
   useEffect(() => {
     if (!token) return;
     const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
@@ -51,30 +53,58 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  // Hidratación inicial: si hay token, trae /me; si /me falla => logout
   useEffect(() => {
-    if (token && !user) {
-      (async () => {
-        try {
+    (async () => {
+      try {
+        if (token && token !== "null" && token !== "undefined") {
           const { data } = await api.get("/me");
           setUser(data);
           localStorage.setItem("user", JSON.stringify(data));
-        } catch {
-          logout();
+        } else {
+          setUser(null);
         }
-      })();
-    }
-  }, [token]); // eslint-disable-line
+      } catch (err) {
+        // SOLO si /me falla, cerramos sesión
+        console.error("Hydrate /me error:", err?.response?.status, err);
+        logout();
+        return;
+      } finally {
+        setMeTried(true);
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // una vez
 
   async function login(email, password) {
     setLoading(true);
     try {
       const { data } = await api.post("/login", { email, password });
-      const { token: t, user: u } = data;
+      const { token: t, user: u } = data || {};
+      if (!t) {
+        return { ok: false, message: "Token inválido" };
+      }
+      // 1) Persistir token + user inmediato (u ya trae role)
       localStorage.setItem("token", t);
-      localStorage.setItem("user", JSON.stringify(u));
       setToken(t);
-      setUser(u);
+
+      if (u) {
+        setUser(u);
+        localStorage.setItem("user", JSON.stringify(u));
+      }
+
       markActivity();
+
+      // 2) (opcional) refrescar /me sin botar al usuario si falla
+      try {
+        const me = await api.get("/me");
+        setUser(me.data);
+        localStorage.setItem("user", JSON.stringify(me.data));
+      } catch (e) {
+        console.warn("Refresh /me falló; se mantiene el user de login", e?.response?.status);
+      }
+
       return { ok: true };
     } catch (err) {
       const msg =
@@ -98,8 +128,8 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ token, user, loading, login, logout }),
-    [token, user, loading]
+    () => ({ token, user, loading, meTried, login, logout }),
+    [token, user, loading, meTried]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

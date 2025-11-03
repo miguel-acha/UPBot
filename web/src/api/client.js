@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:8000/api",
+  baseURL: import.meta.env?.VITE_API_URL || "http://localhost:8000/api",
   timeout: 15000,
 });
 
@@ -10,24 +10,17 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else {
+    delete config.headers.Authorization;
   }
   return config;
 });
 
-// Si el token no sirve → logout y al login
+// NO desloguear automáticamente por cualquier 401.
+// Deja que AuthContext decida (basado en /me).
 api.interceptors.response.use(
   (r) => r,
-  (error) => {
-    const status = error?.response?.status;
-    if (status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      if (!location.pathname.startsWith("/login")) {
-        location.href = "/login";
-      }
-    }
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 export default api;

@@ -1,0 +1,17 @@
+﻿# Laravel
+/api/vendor/
+/api/storage/*.key
+/api/storage/logs/
+/api/bootstrap/cache/
+/api/.env
+/api/.env.*
+
+# Frontend
+/web/node_modules/
+/web/dist/
+/web/build/
+
+# SO/editores
+.DS_Store
+.idea/
+/.vscode/

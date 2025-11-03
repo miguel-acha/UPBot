@@ -271,3 +271,68 @@ body{
 .enroll-badge.approved{ border-color:#2e7d32; color:#b9f6ca; }
 .enroll-badge.failed{ border-color:#b00020; color:#ffb3c2; }
 .enroll-badge.dropped{ border-color:#b08900; color:#ffe082; }
+
+/* --- Select con look idéntico al input --- */
+.field select{
+  width:100%;
+  height:44px;
+  padding:0 40px 0 40px;       /* icono izq (40) + flecha der (40) */
+  border-radius:12px;
+  background:#121a2b;          /* = .field input */
+  color:#e6ecff;               /* = .field input */
+  border:1px solid #1f2943;    /* = .field input */
+  font:inherit;
+  outline:none;
+  transition:border-color .15s, box-shadow .15s;
+
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
+
+  /* flecha derecha */
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='%23a7b0c0'><path d='M7 10l5 5 5-5H7z'/></svg>");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:18px 18px;
+}
+
+.field select:hover{ border-color:#26325a; } /* leve */
+.field select:focus{
+  border-color:#3a57ff;        /* = .field input:focus */
+  box-shadow:0 0 0 3px rgba(58,87,255,.25);
+}
+
+/* si usas una opción placeholder deshabilitada */
+.field select:invalid{ color:#8b99b1; }  /* = placeholder input */
+.field select::-ms-expand{ display:none; }
+
+/* Select con look idéntico al input */
+/* Select con look idéntico al input */
+.field select{
+  width:100%;
+  height:44px;
+  padding:0 40px 0 40px;       /* icono izq + flecha der */
+  border-radius:12px;
+  background:#121a2b;          /* = .field input */
+  color:#e6ecff;               /* = .field input */
+  border:1px solid #1f2943;    /* = .field input */
+  font:inherit;
+  outline:none;
+  transition:border-color .15s, box-shadow .15s;
+
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
+
+  /* flecha derecha */
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='%23a7b0c0'><path d='M7 10l5 5 5-5H7z'/></svg>");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:18px 18px;
+}
+.field select:hover{ border-color:#26325a; }
+.field select:focus{
+  border-color:#3a57ff;
+  box-shadow:0 0 0 3px rgba(58,87,255,.25);
+}
+.field select::-ms-expand{ display:none; }

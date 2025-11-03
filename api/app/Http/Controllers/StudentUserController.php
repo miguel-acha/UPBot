@@ -56,15 +56,16 @@ class StudentUserController extends Controller
             ],
             'password' => ['required','string','min:8'],
 
+            // Rol opcional (por defecto: student)
+            'role'     => ['nullable', Rule::in(['student', 'teacher', 'head_of_program'])],
+
             // Datos del alumno
             'student'               => ['nullable','array'],
             'student.full_name'     => ['nullable','string','max:150'],
-            'student.ci'            => ['required','string','max:50'], // ✅ ahora es obligatorio
+            'student.ci'            => ['required','string','max:50'],
             'student.program_id'    => ['nullable','integer'],
             'student.telefono'      => ['nullable','string','max:50'],
             'student.status'        => ['nullable','string','max:50'], // active/inactive/graduated/suspended
-            // Si tu BD NO tiene índice unique para ci, NO pongas Rule::unique en 'ci'
-            // Si lo tuviera, puedes usar: Rule::unique('students','ci')
         ]);
 
         $result = DB::transaction(function () use ($data) {
@@ -90,14 +91,18 @@ class StudentUserController extends Controller
             $student->email_institucional = $data['email'];
             $student->save();
 
+            // Rol (default: student)
+            $role = $data['role'] ?? 'student';
+            $mustChange = $role === 'student';
+
             // 2) Crear User vinculado
             $user = User::create([
                 'name'                 => $data['name'],
                 'email'                => $data['email'],
                 'password'             => Hash::make($data['password']),
-                'role'                 => 'student',
+                'role'                 => $role,
                 'is_active'            => true,
-                'must_change_password' => true,
+                'must_change_password' => $mustChange,
                 'student_id'           => $student->id,
             ]);
 

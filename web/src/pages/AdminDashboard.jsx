@@ -1,12 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import api from "../api/client";
 import Topbar from "../components/Topbar";
+import { useAuth } from "../context/AuthContext";
 
 export default function AdminDashboard() {
+  const { user } = useAuth();
+  const role = useMemo(
+    () => String(user?.role || user?.roles?.[0] || "").toLowerCase(),
+    [user]
+  );
+
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [ci, setCi] = useState("");
   const [password, setPassword] = useState("UPB-2025");
+  const [roleToCreate, setRoleToCreate] = useState("student");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [ok, setOk] = useState(false);
@@ -20,6 +29,7 @@ export default function AdminDashboard() {
     const nameNorm = name.trim();
     const ciNorm = ci.trim();
     const pwd = String(password || "").trim();
+    const roleNorm = String(roleToCreate || "").toLowerCase();
 
     if (!emailNorm.endsWith("@upb.edu")) {
       setError("El correo debe terminar en @upb.edu");
@@ -28,11 +38,6 @@ export default function AdminDashboard() {
     }
     if (!nameNorm) {
       setError("El nombre es obligatorio");
-      setShowNotification(true);
-      return;
-    }
-    if (!ciNorm) {
-      setError("El Carnet de Identidad es obligatorio");
       setShowNotification(true);
       return;
     }
@@ -45,24 +50,35 @@ export default function AdminDashboard() {
     setError("");
     setOk(false);
     setLoading(true);
+
     try {
-      const { data } = await api.post("/admin/student-user", {
-        email: emailNorm,
-        name: nameNorm,
-        password: pwd,
-        student: {
-          full_name: nameNorm,
-          ci: ciNorm,
-        },
-      });
+      let resp;
+      if (roleNorm === "student") {
+        resp = await api.post("/admin/student-user", {
+          email: emailNorm,
+          name: nameNorm,
+          password: pwd,
+          student: { full_name: nameNorm, ci: ciNorm || null },
+        });
+      } else {
+        resp = await api.post("/users", {
+          email: emailNorm,
+          name: nameNorm,
+          password: pwd,
+          role: roleNorm, // teacher | head_of_program | admin
+          is_active: true,
+        });
+      }
 
       setOk(true);
-      setSuccessText(data?.message || "Usuario creado correctamente.");
+      setSuccessText(resp?.data?.message || "Usuario creado correctamente.");
       setShowNotification(true);
+
       setEmail("");
       setName("");
       setCi("");
       setPassword("UPB-2025");
+      setRoleToCreate("student");
     } catch (err) {
       const errorMsg =
         err?.response?.data?.message ||
@@ -96,11 +112,27 @@ export default function AdminDashboard() {
     setOk(false);
   };
 
+  // --- Autorización a nivel de componente ---
+  if (role && role !== "admin") {
+    return (
+      <>
+        <Topbar />
+        <div className="screen">
+          <div className="bg-blob" />
+          <div className="bg-blob b2" />
+          <div className="card login-card hoverable" style={{ textAlign: "center" }}>
+            <h1 className="h2">No autorizado</h1>
+            <p className="small muted">Esta sección es solo para administradores.</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Topbar />
 
-      {/* Toast Notification */}
       {showNotification && (error || ok) && (
         <div
           style={{
@@ -179,6 +211,7 @@ export default function AdminDashboard() {
           </p>
 
           <form className="form" onSubmit={handleSubmit} autoComplete="off">
+            {/* Correo */}
             <div>
               <label className="label" htmlFor="email">Correo</label>
               <div className="field">
@@ -198,48 +231,69 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Campo Nombre */}
-<div>
-  <label className="label" htmlFor="name">Nombre</label>
-  <div className="field">
-    <span className="icon-left" aria-hidden>
-      {/* 👤 Ícono usuario */}
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/>
-      </svg>
-    </span>
-    <input
-      id="name"
-      type="text"
-      placeholder="Nombre completo"
-      value={name}
-      onChange={(e) => setName(e.target.value)}
-      required
-    />
-  </div>
-</div>
+            {/* Nombre */}
+            <div>
+              <label className="label" htmlFor="name">Nombre</label>
+              <div className="field">
+                <span className="icon-left" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 12c2.7 0 5-2.3 5-5S14.7 2 12 2 7 4.3 7 7s2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/>
+                  </svg>
+                </span>
+                <input
+                  id="name"
+                  type="text"
+                  placeholder="Nombre completo"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
 
-{/* Campo CI */}
-<div>
-  <label className="label" htmlFor="ci">Carnet de Identidad</label>
-  <div className="field">
-    <span className="icon-left" aria-hidden>
-      {/* 🪪 Ícono tarjeta */}
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zM6 10h5v2H6v-2z"/>
-      </svg>
-    </span>
-    <input
-      id="ci"
-      type="text"
-      placeholder="0000000 SC"
-      value={ci}
-      onChange={(e) => setCi(e.target.value)}
-      required
-    />
-  </div>
-</div>
+            {/* CI (opcional) */}
+            <div>
+              <label className="label" htmlFor="ci">Carnet de Identidad </label>
+              <div className="field">
+                <span className="icon-left" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zM6 10h5v2H6v-2z"/>
+                  </svg>
+                </span>
+                <input
+                  id="ci"
+                  type="text"
+                  placeholder="0000000 SC"
+                  value={ci}
+                  onChange={(e) => setCi(e.target.value)}
+                />
+              </div>
+            </div>
 
+            {/* Rol a crear */}
+            <div>
+              <label className="label" htmlFor="role">Rol</label>
+              <div className="field">
+                <span className="icon-left" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l7 4v6c0 5-3.8 9.4-7 10-3.2-.6-7-5-7-10V6l7-4z"/>
+                  </svg>
+                </span>
+                <select
+                  id="role"
+                  value={roleToCreate}
+                  onChange={(e) => setRoleToCreate(e.target.value)}
+                  required
+                >
+                  <option value="student">Estudiante</option>
+                  <option value="teacher">Docente</option>
+                  <option value="head_of_program">Jefe de carrera</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Contraseña */}
             <div>
               <label className="label" htmlFor="password">Contraseña inicial</label>
               <div className="field">
