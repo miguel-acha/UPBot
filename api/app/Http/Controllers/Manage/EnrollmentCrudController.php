@@ -4,74 +4,61 @@ namespace App\Http\Controllers\Manage;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Schema;
 
 class EnrollmentCrudController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request)
     {
-        $rows = DB::table('enrollments as e')
-            ->join('course_offerings as co', 'co.id','=','e.course_offering_id')
-            ->join('courses as c', 'c.id','=','co.course_id')
-            ->leftJoin('students as s', 's.id','=','e.student_id')
-            ->select(
-                'e.id','e.student_id','e.course_offering_id','e.status',
-                'c.code','c.name','co.semester_id','co.`group`',
-                's.full_name as student_name','s.ci as student_ci'
-            )
-            ->when($request->course_offering_id, fn($q) => $q->where('e.course_offering_id', $request->course_offering_id))
-            ->orderByDesc('e.id')
-            ->get();
+        $user = $request->user();
+        $role = strtolower((string)($user->role ?? ($user->roles[0] ?? '')));
 
-        return response()->json($rows);
-    }
+        $q = DB::table('enrollments AS e')
+            ->join('students AS s', 's.id', '=', 'e.student_id')
+            ->join('course_offerings AS co', 'co.id', '=', 'e.course_offering_id')
+            ->join('courses AS c', 'c.id', '=', 'co.course_id')
+            ->leftJoin('users AS u', 'u.student_id', '=', 's.id')
+            ->selectRaw("
+                e.id,
+                e.status,
+                e.course_offering_id,
+                s.id AS student_id,
+                COALESCE(NULLIF(TRIM(s.full_name), ''), NULLIF(TRIM(u.name), ''), CAST(s.ci AS CHAR)) AS student_name,
+                s.ci AS student_ci,
+                c.code AS course_code,
+                c.name AS course_name
+            ");
 
-    public function store(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'student_id'         => ['required','integer','exists:students,id'],
-            'course_offering_id' => ['required','integer','exists:course_offerings,id'],
-        ]);
-
-        $exists = DB::table('enrollments')
-            ->where('student_id', $data['student_id'])
-            ->where('course_offering_id', $data['course_offering_id'])
-            ->exists();
-
-        if ($exists) {
-            return response()->json(['message' => 'El estudiante ya está inscrito en esta oferta.'], 422);
+        // Filtro por oferta (lo manda el front al pulsar "Ver inscritos")
+        if ($request->filled('course_offering_id')) {
+            $q->where('e.course_offering_id', (int) $request->input('course_offering_id'));
         }
 
-        $id = DB::table('enrollments')->insertGetId([
-            'student_id'         => $data['student_id'],
-            'course_offering_id' => $data['course_offering_id'],
-            'status'             => 'enrolled',
-            'created_at'         => now(),
-            'updated_at'         => now(),
-        ]);
+        // Si el usuario es docente, solo filtramos si *existe* una columna teacher_id en alguna tabla conocida
+        if ($role === 'teacher') {
+            if (Schema::hasColumn('course_offerings', 'teacher_id')) {
+                $q->where('co.teacher_id', $user->id);
+            } elseif (Schema::hasColumn('courses', 'teacher_id')) {
+                $q->where('c.teacher_id', $user->id);
+            }
+            // Si no hay columna de asignación de docente, no filtramos (evita el 500)
+        }
 
-        return response()->json(['created'=>true,'id'=>$id], 201);
-    }
+        // Búsqueda opcional
+        if ($request->filled('q')) {
+            $term = '%' . $request->input('q') . '%';
+            $q->where(function ($qq) use ($term) {
+                $qq->where('s.full_name', 'like', $term)
+                   ->orWhere('u.name', 'like', $term)
+                   ->orWhere('s.ci', 'like', $term)
+                   ->orWhere('c.code', 'like', $term)
+                   ->orWhere('c.name', 'like', $term);
+            });
+        }
 
-    public function update(Request $request, int $id): JsonResponse
-    {
-        $data = $request->validate([
-            'status' => ['required', Rule::in(['enrolled','dropped','approved','failed'])],
-        ]);
+        $rows = $q->orderBy('c.code')->orderBy('student_name')->get();
 
-        DB::table('enrollments')->where('id',$id)->update([
-            'status'     => $data['status'],
-            'updated_at' => now(),
-        ]);
-
-        return response()->json(['updated'=>true]);
-    }
-
-    public function destroy(int $id): JsonResponse
-    {
-        DB::table('enrollments')->where('id',$id)->delete();
-        return response()->json(['deleted'=>true]);
+        return response()->json($rows);
     }
 }

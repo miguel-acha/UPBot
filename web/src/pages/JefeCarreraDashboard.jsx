@@ -2,55 +2,124 @@ import { useEffect, useMemo, useState } from "react";
 import Topbar from "../components/Topbar";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import {
+  getSemesters,
+  getKpis,
+  pdfOfferings,
+  pdfEnrolls,
+  pdfGrades,
+  downloadBlob,
+} from "../api/reports";
 
 export default function JefeCarreraDashboard() {
   const { user } = useAuth();
   const role = useMemo(
-    () => String(user?.role || user?.roles?.[0] || "").toLowerCase(),
+    () => String(user?.role || (user?.roles && user?.roles[0]) || "").toLowerCase(),
     [user]
   );
+  const isHead = role === "head_of_program";
+
+  const [periods, setPeriods] = useState([]);
+  const [period, setPeriod] = useState("");
+  const [q, setQ] = useState("");
 
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState("");
   const [error, setError] = useState("");
 
+  const [kpi, setKpi] = useState(null);
+
   useEffect(() => {
-    if (role !== "head_of_program") return; // evita llamada si no corresponde
+    if (!isHead) return;
+    loadSemesters();
+  }, [isHead]);
+
+  useEffect(() => {
+    if (!isHead) return;
     fetchCourses();
+    fetchKpis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role]);
+  }, [period, q, isHead]);
+
+  async function loadSemesters() {
+    try {
+      const { data } = await getSemesters();
+      setPeriods(Array.isArray(data) ? data : []);
+    } catch {
+      setPeriods([]);
+    }
+  }
+
+  async function fetchKpis() {
+    try {
+      const { data } = await getKpis({ period: period || undefined });
+      setKpi(data);
+    } catch {
+      setKpi(null);
+    }
+  }
 
   async function fetchCourses() {
     setLoading(true);
     setError("");
     try {
-      const response = await api.get("/courses");
-      // Acepta array directo o {data: array}
-      const arr = Array.isArray(response?.data)
-        ? response.data
-        : Array.isArray(response?.data?.data)
-        ? response.data.data
+      const params = {};
+      if (period) params.period = period;
+      if (q) params.q = q;
+      const res = await api.get("/courses", { params });
+
+      const raw = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.data?.data)
+        ? res.data.data
         : [];
+
+      // 🔧 Normaliza nombres y asegura el conteo de inscritos
+      const arr = raw.map((it) => ({
+        ...it,
+        offering_id: it.offering_id ?? it.id ?? it.offeringId,
+        total_enrollments:
+          it.total_enrollments ??
+          it.enrollments_count ??
+          it.enrollments ??
+          it.total ??
+          it.inscritos ??
+          (it.metrics && (it.metrics.total_enrollments ?? it.metrics.enrollments)) ??
+          0,
+      }));
+
       setCourses(arr);
     } catch (err) {
-      console.error("Error al cargar cursos", err);
-      const msg =
-        err?.response?.data?.message ||
-        `No se pudieron cargar los cursos (${err?.response?.status || "ERR"}).`;
-      setError(msg);
+      setError(err?.response?.data?.message || "No se pudieron cargar las ofertas.");
+      setCourses([]);
     } finally {
       setLoading(false);
     }
   }
 
-  const filteredCourses = useMemo(() => {
-    const list = Array.isArray(courses) ? courses : [];
-    return period ? list.filter((c) => c?.period === period) : list;
-  }, [courses, period]);
+  const onDownload = async (what) => {
+    try {
+      const params = period ? { period } : {};
+      let r, name;
+      if (what === "offerings") {
+        r = await pdfOfferings(params);
+        name = `ofertas${period ? "-" + period : ""}.pdf`;
+      }
+      if (what === "enrolls") {
+        r = await pdfEnrolls(params);
+        name = `inscritos${period ? "-" + period : ""}.pdf`;
+      }
+      if (what === "grades") {
+        r = await pdfGrades(params);
+        name = `notas${period ? "-" + period : ""}.pdf`;
+      }
+      if (r?.data) downloadBlob(r.data, name);
+    } catch {
+      alert("No se pudo descargar el PDF");
+    }
+  };
 
-  // --- Autorización simple al nivel de componente ---
-  if (role && role !== "head_of_program") {
+  if (role && !isHead) {
     return (
       <>
         <Topbar />
@@ -72,58 +141,94 @@ export default function JefeCarreraDashboard() {
       <div className="screen">
         <div className="bg-blob" />
         <div className="bg-blob b2" />
-
-        <div className="card login-card hoverable" style={{ textAlign: "left" }}>
+        <div className="card login-card hoverable" style={{ textAlign: "left", width: "min(900px,95vw)" }}>
           <h1 className="h2" style={{ textAlign: "center", marginBottom: 12 }}>
             Panel Jefe de Carrera
           </h1>
-          <p className="small muted" style={{ textAlign: "center", marginTop: 0 }}>
-            Visualiza cursos, inscripciones y genera documentos.
-          </p>
+          <p className="small muted" style={{ textAlign: "center", marginTop: 0 }} />
 
-          {/* Filtro */}
-          <div className="form" style={{ marginTop: 20 }}>
-            <label className="label" htmlFor="period">Filtrar por periodo</label>
+          {/* Filtros */}
+          <div className="form" style={{ marginTop: 14 }}>
             <div className="field">
               <span className="icon-left" aria-hidden>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2l7 4v6c0 5-3.8 9.4-7 10-3.2-.6-7-5-7-10V6l7-4z"/>
+                  <path d="M12 2l7 4v6c0 5-3.8 9.4-7 10-3.2-.6-7-5-7-10V6l7-4z" />
                 </svg>
               </span>
               <select id="period" value={period} onChange={(e) => setPeriod(e.target.value)}>
-                <option value="">Todos</option>
-                <option value="2024-1">2024-1</option>
-                <option value="2024-2">2024-2</option>
-                <option value="2025-1">2025-1</option>
+                <option value="">Todos los periodos</option>
+                {periods.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
               </select>
+            </div>
+
+            <div className="field">
+              <span className="icon-left" aria-hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M21 21l-4.3-4.3M10 18a8 8 0 110-16 8 8 0 010 16z" />
+                </svg>
+              </span>
+              <input
+                placeholder="Buscar curso (código o nombre)"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
             </div>
           </div>
 
-          {/* Lista cursos */}
+          {/* KPIs */}
+          <div className="stat-grid" style={{ marginTop: 12 }}>
+            <div className="stat">
+              <div className="small muted">Ofertas</div>
+              <div className="stat-num">{kpi?.offerings ?? "—"}</div>
+            </div>
+            <div className="stat">
+              <div className="small muted">Inscritos</div>
+              <div className="stat-num">{kpi?.enrollments ?? "—"}</div>
+            </div>
+            <div className="stat">
+              <div className="small muted">Promedio notas</div>
+              <div className="stat-num">{kpi?.avg_score ?? "—"}</div>
+            </div>
+            <div className="stat">
+              <div className="small muted">Periodo</div>
+              <div className="stat-num">{kpi?.period || "Todos"}</div>
+            </div>
+          </div>
+
+          {/* Exportaciones */}
+          <div className="section">
+            <div className="section-head">
+              <h3 className="section-title">Exportaciones (PDF)</h3>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="link-btn" onClick={() => onDownload("offerings")}>Ofertas PDF</button>
+                <button className="link-btn" onClick={() => onDownload("enrolls")}>Inscritos PDF</button>
+                <button className="link-btn" onClick={() => onDownload("grades")}>Notas PDF</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Lista ofertas */}
           {loading ? (
             <div className="loading-list" style={{ marginTop: 16 }}>
-              <div className="skel-card" />
-              <div className="skel-card" />
+              <div className="skel-card" /><div className="skel-card" />
             </div>
           ) : error ? (
             <p className="error" style={{ marginTop: 16 }}>{error}</p>
-          ) : filteredCourses.length === 0 ? (
-            <div className="note" style={{ marginTop: 16 }}>
-              No hay cursos para mostrar con el filtro aplicado.
-            </div>
+          ) : (courses ?? []).length === 0 ? (
+            <div className="note" style={{ marginTop: 16 }}>No hay resultados con el filtro.</div>
           ) : (
             <ul className="list list-appear" style={{ marginTop: 16 }}>
-              {filteredCourses.map((course) => (
-                <li key={course?.id ?? `${course?.code}-${course?.period}`} className="list-item">
+              {courses.map((c) => (
+                <li key={c.offering_id} className="list-item">
                   <div className="list-content">
-                    <div className="title">{course?.name ?? "Curso"}</div>
+                    <div className="title">{c.name}</div>
                     <p className="small muted">
-                      {(course?.code || "—")} — {(course?.period || "—")}
+                      {c.code} — {c.period}{c.group ? ` — Grupo ${c.group}` : ""}
                     </p>
                   </div>
-                  <span className="badge">
-                    Inscritos: {course?.total_enrollments ?? 0}
-                  </span>
+                  <span className="badge">Inscritos: {c.total_enrollments}</span>
                 </li>
               ))}
             </ul>

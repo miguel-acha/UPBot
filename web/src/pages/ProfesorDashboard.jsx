@@ -2,23 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import Topbar from "../components/Topbar";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { getSemesters, pdfEnrolls, pdfGrades, downloadBlob } from "../api/reports";
 
 export default function ProfesorDashboard() {
   const { user } = useAuth();
-  const role = useMemo(() => String(user?.role || "").toLowerCase(), [user]);
-
-  const [periodFilter, setPeriodFilter] = useState("");
-  const [courses, setCourses] = useState([]);
-  const [loadingCourses, setLoadingCourses] = useState(true);
-  const [coursesError, setCoursesError] = useState("");
-
-  const [selectedOfferingId, setSelectedOfferingId] = useState(null);
-  const [enrollments, setEnrollments] = useState([]);
-  const [loadingEnroll, setLoadingEnroll] = useState(false);
-  const [enrollError, setEnrollError] = useState("");
-
-  // Para editar estado y notas
-  const [gradeEditors, setGradeEditors] = useState({}); // enrollmentId -> {component, score}
+  const role = useMemo(
+    () => String(user?.role || (user?.roles && user?.roles[0]) || "").toLowerCase(),
+    [user]
+  );
 
   if (role && role !== "teacher") {
     return (
@@ -36,18 +27,85 @@ export default function ProfesorDashboard() {
     );
   }
 
-  useEffect(() => {
-    fetchCourses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodFilter]);
+  // ---------- STATE ----------
+  const [periods, setPeriods] = useState([]);
+  const [periodFilter, setPeriodFilter] = useState("");
+  const [q, setQ] = useState("");
+
+  const [courses, setCourses] = useState([]);
+  const [loadingCourses, setLoadingCourses] = useState(true);
+  const [coursesError, setCoursesError] = useState("");
+
+  const [selectedOfferingId, setSelectedOfferingId] = useState(null);
+  const [enrollments, setEnrollments] = useState([]);
+  const [loadingEnroll, setLoadingEnroll] = useState(false);
+  const [enrollError, setEnrollError] = useState("");
+
+  // ---------- HELPERS SOLO-UI ----------
+  const ORDER = ["final", "primer_parcial", "segundo_parcial"];
+  const normalizeComponent = (name) => {
+    const c = String(name || "").toLowerCase();
+    if (c === "parcial1" || c === "primer_parcial") return "primer_parcial";
+    if (c === "parcial2" || c === "segundo_parcial") return "segundo_parcial";
+    if (c === "final") return "final";
+    return c;
+  };
+  const sortGrades = (grades = []) => {
+    const g = (grades ?? []).map(x => ({ ...x, component: normalizeComponent(x.component) }));
+    g.sort((a, b) => {
+      const ia = ORDER.indexOf(a.component);
+      const ib = ORDER.indexOf(b.component);
+      return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+    });
+    return g;
+  };
+  const finalScore = (grades = []) => {
+    const f = (grades ?? []).find(x => normalizeComponent(x.component) === "final");
+    return typeof f?.score === "number" ? f.score : -1;
+  };
+
+  // Lista “presentacional” para la UI (no cambia los datos originales)
+  const uiEnrollments = useMemo(() => {
+    const withSortedGrades = (enrollments ?? []).map(e => ({
+      ...e,
+      grades: sortGrades(e.grades || []),
+      _finalScore: finalScore(e.grades || [])
+    }));
+    // Orden visual por nota final desc, luego por nombre
+    withSortedGrades.sort((a, b) => {
+      const d = (b._finalScore ?? -1) - (a._finalScore ?? -1);
+      if (d !== 0) return d;
+      return String(a.student_name || "").localeCompare(String(b.student_name || ""));
+    });
+    return withSortedGrades;
+  }, [enrollments]);
+
+  // ---------- EFFECTS ----------
+  useEffect(() => { loadSemesters(); }, []);
+  useEffect(() => { fetchCourses(); /* eslint-disable-next-line */ }, [periodFilter, q]);
+
+  async function loadSemesters() {
+    try {
+      const { data } = await getSemesters();
+      setPeriods(Array.isArray(data) ? data : []);
+    } catch {
+      setPeriods([]);
+    }
+  }
 
   async function fetchCourses() {
     setLoadingCourses(true);
     setCoursesError("");
     try {
-      // Usamos tu endpoint existente de cursos (que ya usabas en la versión previa)
-      const res = await api.get("/courses", { params: periodFilter ? { period: periodFilter } : {} });
-      const arr = Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : [];
+      const params = {};
+      if (periodFilter) params.period = periodFilter;
+      if (q) params.q = q;
+      const res = await api.get("/courses", { params });
+      const arr = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.data?.data)
+        ? res.data.data
+        : [];
       setCourses(arr);
     } catch (err) {
       setCoursesError(err?.response?.data?.message || "No se pudieron obtener los cursos.");
@@ -57,71 +115,68 @@ export default function ProfesorDashboard() {
     }
   }
 
+  // Carga inscritos + notas (solo lectura)
   async function fetchEnrollments(offeringId) {
     setSelectedOfferingId(offeringId);
     setEnrollError("");
     setLoadingEnroll(true);
     try {
-      const res = await api.get("/manage/enrollments", {
-        params: { course_offering_id: offeringId }, // permitido teacher
-      });
-      const arr = Array.isArray(res?.data) ? res.data : [];
-      setEnrollments(arr);
+      const res = await api.get("/manage/enrollments", { params: { course_offering_id: offeringId } });
+      const base = Array.isArray(res?.data) ? res.data : [];
+      const withGrades = await Promise.all(
+        base.map(async (e) => {
+          try {
+            const g = await api.get("/manage/grades", { params: { enrollment_id: e.id } });
+            return { ...e, grades: Array.isArray(g?.data) ? g.data : [] };
+          } catch {
+            return { ...e, grades: [] };
+          }
+        })
+      );
+      setEnrollments(withGrades);
     } catch (err) {
-      setEnrollError(err?.response?.data?.message || "No se pudieron obtener los inscritos.");
+      const msg = err?.response?.data?.message || "No se pudieron obtener los inscritos.";
+      const detail = err?.response?.data?.detail || err?.message;
+      console.error("ENROLLMENTS ERROR:", err?.response?.status, detail);
+      setEnrollError(`${msg}${detail ? " — " + detail : ""}`);
       setEnrollments([]);
     } finally {
       setLoadingEnroll(false);
     }
   }
 
-  async function updateEnrollmentStatus(enrollmentId, status) {
+  // ---------- DESCARGAS ----------
+  const downloadEnrolls = async () => {
     try {
-      await api.put(`/manage/enrollments/${enrollmentId}`, { status }); // permitido teacher
-      setEnrollments((old) => old.map((e) => (e.id === enrollmentId ? { ...e, status } : e)));
-    } catch (err) {
-      alert(err?.response?.data?.message || "No se pudo actualizar el estado");
-    }
-  }
-
-  async function loadGrades(enrollmentId) {
-    try {
-      const res = await api.get("/manage/grades", { params: { enrollment_id: enrollmentId } });
-      const list = Array.isArray(res?.data) ? res.data : [];
-      setEnrollments((old) =>
-        old.map((e) => (e.id === enrollmentId ? { ...e, grades: list } : e))
+      const params = {};
+      if (selectedOfferingId) params.course_offering_id = selectedOfferingId;
+      if (periodFilter) params.period = periodFilter;
+      const r = await pdfEnrolls(params);
+      downloadBlob(
+        r.data,
+        `inscritos${selectedOfferingId ? "-off" + selectedOfferingId : ""}${periodFilter ? "-" + periodFilter : ""}.pdf`
       );
-    } catch (err) {
-      alert("No se pudieron cargar las notas");
-    }
-  }
-
-  async function upsertGrade(enrollmentId) {
-    const editor = gradeEditors[enrollmentId] || {};
-    if (!editor.component) return alert("Completa el componente de la nota");
-    try {
-      await api.post("/manage/grades/upsert", {
-        enrollment_id: enrollmentId,
-        component: editor.component,
-        score: editor.score === "" ? null : Number(editor.score),
-      });
-      setGradeEditors((g) => ({ ...g, [enrollmentId]: { component: "", score: "" } }));
-      await loadGrades(enrollmentId);
-    } catch (err) {
-      alert(err?.response?.data?.message || "No se pudo guardar la nota");
-    }
-  }
-
-  async function deleteGrade(gradeId, enrollmentId) {
-    if (!confirm("¿Eliminar nota?")) return;
-    try {
-      await api.delete(`/manage/grades/${gradeId}`);
-      await loadGrades(enrollmentId);
     } catch {
-      alert("No se pudo eliminar la nota");
+      alert("No se pudo descargar inscritos");
     }
-  }
+  };
 
+  const downloadGrades = async () => {
+    try {
+      const params = {};
+      if (selectedOfferingId) params.course_offering_id = selectedOfferingId;
+      if (periodFilter) params.period = periodFilter;
+      const r = await pdfGrades(params);
+      downloadBlob(
+        r.data,
+        `notas${selectedOfferingId ? "-off" + selectedOfferingId : ""}${periodFilter ? "-" + periodFilter : ""}.pdf`
+      );
+    } catch {
+      alert("No se pudo descargar notas");
+    }
+  };
+
+  // ---------- RENDER ----------
   return (
     <>
       <Topbar />
@@ -129,57 +184,53 @@ export default function ProfesorDashboard() {
         <div className="bg-blob" />
         <div className="bg-blob b2" />
 
-        <div className="card login-card hoverable" style={{ textAlign: "left" }}>
-          <h1 className="h2" style={{ textAlign: "center", marginBottom: 12 }}>
-            Panel Profesor
-          </h1>
-          <p className="small muted" style={{ textAlign: "center", marginTop: 0 }}>
-            Gestión de cursos, inscritos y notas.
-          </p>
+        <div className="card login-card hoverable" style={{ textAlign: "left", width: "min(1100px,96vw)" }}>
+          <h1 className="h2" style={{ textAlign: "center", marginBottom: 12 }}>Panel Profesor</h1>
 
-          {/* Filtro periodo */}
+          {/* Filtros */}
           <div className="form" style={{ marginTop: 12 }}>
-            <label className="label" htmlFor="periodFilter">Filtrar por periodo (opcional)</label>
             <div className="field">
               <span className="icon-left" aria-hidden>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l7 4v6c0 5-3.8 9.4-7 10-3.2-.6-7-5-7-10V6l7-4z"/></svg>
               </span>
-              <select
-                id="periodFilter"
-                value={periodFilter}
-                onChange={(e) => setPeriodFilter(e.target.value)}
-              >
-                <option value="">Todos</option>
-                <option value="2024-1">2024-1</option>
-                <option value="2024-2">2024-2</option>
-                <option value="2025-1">2025-1</option>
+              <select id="periodFilter" value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)}>
+                <option value="">Todos los periodos</option>
+                {periods.map((p) => (<option key={p} value={p}>{p}</option>))}
               </select>
+            </div>
+
+            <div className="field">
+              <span className="icon-left" aria-hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M21 21l-4.3-4.3M10 18a8 8 0 110-16 8 8 0 010 16z"/></svg>
+              </span>
+              <input
+                placeholder="Buscar curso (código o nombre)"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
             </div>
           </div>
 
           {/* Cursos */}
           {loadingCourses ? (
             <div className="loading-list" style={{ marginTop: 16 }}>
-              <div className="skel-card" />
-              <div className="skel-card" />
+              <div className="skel-card" /><div className="skel-card" />
             </div>
           ) : coursesError ? (
             <p className="error" style={{ marginTop: 16 }}>{coursesError}</p>
-          ) : courses.length === 0 ? (
-            <div className="note" style={{ marginTop: 16 }}>
-              No hay cursos para mostrar con el filtro seleccionado.
-            </div>
+          ) : (courses ?? []).length === 0 ? (
+            <div className="note" style={{ marginTop: 16 }}>No hay cursos con el filtro.</div>
           ) : (
             <ul className="list list-appear" style={{ marginTop: 16 }}>
-              {courses.map((course) => (
-                <li key={course.id} className="list-item">
+              {(courses ?? []).map((course) => (
+                <li key={course.offering_id} className="list-item">
                   <div className="list-content">
                     <div className="title">{course.name}</div>
                     <p className="small muted">
-                      {course.code} — {course.period ?? course.semester_id ?? "—"}
+                      {course.code} — {course.period ?? "—"}{course.group ? ` — Grupo ${course.group}` : ""}
                     </p>
                   </div>
-                  <button className="link-btn" onClick={() => fetchEnrollments(course.id)}>
+                  <button className="link-btn" onClick={() => fetchEnrollments(course.offering_id)}>
                     Ver inscritos
                   </button>
                 </li>
@@ -187,111 +238,105 @@ export default function ProfesorDashboard() {
             </ul>
           )}
 
-          {/* Inscritos + Notas */}
+          {/* Inscritos + Notas (solo lectura, UI ordenada) */}
           {selectedOfferingId != null && (
-            <div className="section" style={{ marginTop: 20 }}>
-              <div className="section-head">
-                <h3 className="section-title">Inscritos</h3>
+            <div className="section" style={{ margin: "20px auto 0", maxWidth: 1000 }}>
+              <div className="section-head" style={{ alignItems: "center" }}>
+                <h3 className="section-title" style={{ marginRight: "auto" }}>Inscritos</h3>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="link-btn" onClick={downloadEnrolls}>Inscritos PDF</button>
+                  <button className="link-btn" onClick={downloadGrades}>Notas PDF</button>
+                </div>
               </div>
 
               {loadingEnroll ? (
                 <div className="loading-list"><div className="skel-card h96" /></div>
               ) : enrollError ? (
                 <p className="error">{enrollError}</p>
-              ) : enrollments.length === 0 ? (
+              ) : (uiEnrollments ?? []).length === 0 ? (
                 <div className="note">No hay inscritos en esta oferta.</div>
               ) : (
-                <ul className="list">
-                  {enrollments.map((enr) => (
-                    <li key={enr.id} className="list-item">
-                      <div className="list-content">
-                        <strong>{enr.student_name ?? enr.student?.full_name ?? "Estudiante"}</strong>
-                        <p className="small muted">CI: {enr.student_ci ?? enr.student?.ci ?? "—"}</p>
+                <ul
+                  className="list"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                    gap: 16,
+                    alignItems: "stretch",
+                    marginTop: 8
+                  }}
+                >
+                  {uiEnrollments.map((enr) => {
+                    const grades = enr.grades || [];
+                    const f = grades.find(g => normalizeComponent(g.component) === "final");
+                    const rest = grades.filter(g => normalizeComponent(g.component) !== "final");
+                    return (
+                      <li
+                        key={enr.id}
+                        className="list-item"
+                        style={{
+                          alignItems: "flex-start",
+                          minHeight: 180,
+                          padding: 16,
+                          display: "flex",
+                          flexDirection: "column",
+                          borderRadius: 12
+                        }}
+                      >
+                        <div className="list-content" style={{ width: "100%" }}>
+                          <strong>{enr.student_name ?? "Estudiante"}</strong>
+                          <p className="small muted">CI: {enr.student_ci ?? "—"}</p>
 
-                        {/* Notas */}
-                        <div className="section" style={{ marginTop: 6 }}>
-                          <div className="small muted" style={{ marginBottom: 6 }}>
-                            Notas:
-                            <button
-                              className="link-btn"
-                              style={{ marginLeft: 8 }}
-                              onClick={() => loadGrades(enr.id)}
+                          {/* FINAL destacado */}
+                          <div style={{ marginTop: 8, marginBottom: 6 }}>
+                            <span className="badge" style={{ marginRight: 8, opacity: 0.85 }}>
+                              final
+                            </span>
+                            <span
+                              className="pill"
+                              style={{
+                                minWidth: 96,
+                                display: "inline-flex",
+                                justifyContent: "center",
+                                fontWeight: 600,
+                                fontSize: 14,
+                                padding: "6px 10px"
+                              }}
                             >
-                              Actualizar
-                            </button>
+                              {typeof f?.score === "number" ? f.score : "—"}
+                            </span>
                           </div>
 
-                          {(enr.grades ?? []).length === 0 ? (
-                            <div className="pill">Sin notas</div>
+                          {/* Restantes en orden fijo */}
+                          <div className="small muted" style={{ marginTop: 2, marginBottom: 6 }}>Notas:</div>
+                          {(rest ?? []).length === 0 ? (
+                            <div className="pill" style={{ minWidth: 120, textAlign: "center" }}>Sin notas</div>
                           ) : (
-                            <ul className="list" style={{ gap: 8 }}>
-                              {enr.grades.map((g) => (
-                                <li key={g.id} className="list-item">
+                            <ul className="list" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {rest.map((g) => (
+                                <li key={g.id} className="list-item" style={{ padding: 0 }}>
                                   <div className="list-content">
-                                    <span className="badge">{g.component}</span>
-                                    <span className="pill" style={{ marginLeft: 8 }}>
+                                    <span className="badge">{normalizeComponent(g.component)}</span>
+                                    <span
+                                      className="pill"
+                                      style={{
+                                        marginLeft: 8,
+                                        minWidth: 96,
+                                        display: "inline-flex",
+                                        justifyContent: "center"
+                                      }}
+                                    >
                                       {g.score ?? "—"}
                                     </span>
                                   </div>
-                                  <button className="link-btn" onClick={() => deleteGrade(g.id, enr.id)}>
-                                    Eliminar
-                                  </button>
                                 </li>
                               ))}
                             </ul>
                           )}
-
-                          {/* Editor de nota */}
-                          <div className="kv-grid" style={{ marginTop: 8 }}>
-                            <div className="field">
-                              <span className="icon-left" aria-hidden>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v12H4z"/></svg>
-                              </span>
-                              <input
-                                type="text"
-                                placeholder="Componente (p. ej. parcial1)"
-                                value={gradeEditors[enr.id]?.component || ""}
-                                onChange={(e)=>setGradeEditors((g)=>({ ...g, [enr.id]: { ...(g[enr.id]||{}), component: e.target.value }}))}
-                              />
-                            </div>
-                            <div className="field">
-                              <span className="icon-left" aria-hidden>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7v10M7 12h10"/></svg>
-                              </span>
-                              <input
-                                type="number"
-                                placeholder="Nota (0-100)"
-                                value={gradeEditors[enr.id]?.score ?? ""}
-                                onChange={(e)=>setGradeEditors((g)=>({ ...g, [enr.id]: { ...(g[enr.id]||{}), score: e.target.value }}))}
-                              />
-                            </div>
-                          </div>
-                          <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => upsertGrade(enr.id)}>
-                            Guardar nota
-                          </button>
                         </div>
-                      </div>
-
-                      {/* Estado inscripción */}
-                      <div style={{ minWidth: 220 }}>
-                        <label className="label">Estado</label>
-                        <div className="field">
-                          <span className="icon-left" aria-hidden>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg>
-                          </span>
-                          <select
-                            value={enr.status}
-                            onChange={(e)=>updateEnrollmentStatus(enr.id, e.target.value)}
-                          >
-                            <option value="enrolled">Inscrito</option>
-                            <option value="dropped">Retirado</option>
-                            <option value="approved">Aprobado</option>
-                            <option value="failed">Reprobado</option>
-                          </select>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

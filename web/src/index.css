@@ -120,6 +120,36 @@ body{
 .ghost-btn{ background:transparent; border:0; color:#b9c3df; padding:6px; border-radius:10px; cursor:pointer; }
 .ghost-btn:hover{ background:#1a2340; color:#fff; }
 
+/* --- Select con look idéntico al input --- */
+.field select{
+  width:100%;
+  height:44px;
+  padding:0 40px 0 40px;       /* icono izq (40) + flecha der (40) */
+  border-radius:12px;
+  background:#121a2b;          /* = .field input */
+  color:#e6ecff;               /* = .field input */
+  border:1px solid #1f2943;    /* = .field input */
+  font:inherit;
+  outline:none;
+  transition:border-color .15s, box-shadow .15s;
+
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
+
+  /* flecha derecha */
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='%23a7b0c0'><path d='M7 10l5 5 5-5H7z'/></svg>");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:18px 18px;
+}
+.field select:hover{ border-color:#26325a; }
+.field select:focus{
+  border-color:#3a57ff;
+  box-shadow:0 0 0 3px rgba(58,87,255,.25);
+}
+.field select::-ms-expand{ display:none; }
+
 /* ===== Buttons ===== */
 .btn{
   height:42px; display:inline-flex; align-items:center; justify-content:center;
@@ -147,9 +177,15 @@ body{
 .h48{ height:48px; } .h96{ height:96px; }
 
 .list{ list-style:none; padding:0; margin:0; display:grid; gap:22px; }
-.list-item{ display:flex; align-items:center; justify-content:space-between; gap:16px; }
-.list-content .title{ font-weight:600; }
+.list-item{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  border:1px solid var(--border);
+  padding:12px 14px; border-radius:12px;
+  background:linear-gradient(180deg,#181d2b,#121826);
+}
+.list-content .title{ font-weight:700; letter-spacing:.2px; }
 
+/* Skeleton cards */
 .loading-list{ display:grid; gap:22px; margin-top:8px; }
 .skel-card{
   height:96px; border-radius:14px;
@@ -245,12 +281,12 @@ body{
   .thead .th:nth-child(n+4), .tbody .td:nth-child(n+4){ display:none; }
 }
 
-/* Estadística simple (por si luego) */
+/* Estadística simple */
 .stat-grid{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; }
 .stat{ padding:12px; border:1px solid var(--border); border-radius:12px; background:#0f1627; }
 .stat-num{ font-size:20px; font-weight:800; }
 
-/* Enrollments (por si luego) */
+/* Enrollments */
 .enroll-list{ list-style:none; padding:0; margin:0; display:grid; gap:10px; }
 .enroll-item{
   display:grid; grid-template-columns: 120px 1fr auto auto; gap:10px; align-items:center;
@@ -272,67 +308,3 @@ body{
 .enroll-badge.failed{ border-color:#b00020; color:#ffb3c2; }
 .enroll-badge.dropped{ border-color:#b08900; color:#ffe082; }
 
-/* --- Select con look idéntico al input --- */
-.field select{
-  width:100%;
-  height:44px;
-  padding:0 40px 0 40px;       /* icono izq (40) + flecha der (40) */
-  border-radius:12px;
-  background:#121a2b;          /* = .field input */
-  color:#e6ecff;               /* = .field input */
-  border:1px solid #1f2943;    /* = .field input */
-  font:inherit;
-  outline:none;
-  transition:border-color .15s, box-shadow .15s;
-
-  appearance:none;
-  -webkit-appearance:none;
-  -moz-appearance:none;
-
-  /* flecha derecha */
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='%23a7b0c0'><path d='M7 10l5 5 5-5H7z'/></svg>");
-  background-repeat:no-repeat;
-  background-position:right 12px center;
-  background-size:18px 18px;
-}
-
-.field select:hover{ border-color:#26325a; } /* leve */
-.field select:focus{
-  border-color:#3a57ff;        /* = .field input:focus */
-  box-shadow:0 0 0 3px rgba(58,87,255,.25);
-}
-
-/* si usas una opción placeholder deshabilitada */
-.field select:invalid{ color:#8b99b1; }  /* = placeholder input */
-.field select::-ms-expand{ display:none; }
-
-/* Select con look idéntico al input */
-/* Select con look idéntico al input */
-.field select{
-  width:100%;
-  height:44px;
-  padding:0 40px 0 40px;       /* icono izq + flecha der */
-  border-radius:12px;
-  background:#121a2b;          /* = .field input */
-  color:#e6ecff;               /* = .field input */
-  border:1px solid #1f2943;    /* = .field input */
-  font:inherit;
-  outline:none;
-  transition:border-color .15s, box-shadow .15s;
-
-  appearance:none;
-  -webkit-appearance:none;
-  -moz-appearance:none;
-
-  /* flecha derecha */
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='%23a7b0c0'><path d='M7 10l5 5 5-5H7z'/></svg>");
-  background-repeat:no-repeat;
-  background-position:right 12px center;
-  background-size:18px 18px;
-}
-.field select:hover{ border-color:#26325a; }
-.field select:focus{
-  border-color:#3a57ff;
-  box-shadow:0 0 0 3px rgba(58,87,255,.25);
-}
-.field select::-ms-expand{ display:none; }

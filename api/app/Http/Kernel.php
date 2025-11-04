@@ -6,18 +6,38 @@ use Illuminate\Foundation\Http\Kernel as HttpKernel;
 
 class Kernel extends HttpKernel
 {
-    // ...
-
     protected $middlewareAliases = [
-        // Laravel 11+ (aliases). En Laravel 10 usa $routeMiddleware:
-        // 'role' => \App\Http\Middleware\RoleMiddleware::class,
-
-        // Si tu proyecto tiene $routeMiddleware (Laravel <=10), agrega aquí:
-        // 'role' => \App\Http\Middleware\RoleMiddleware::class,
+        'role'             => \App\Http\Middleware\RoleMiddleware::class,
+        'auth'             => \App\Http\Middleware\Authenticate::class,
+        'guest'            => \App\Http\Middleware\RedirectIfAuthenticated::class,
+        'auth.basic'       => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
+        'auth.session'     => \Illuminate\Session\Middleware\AuthenticateSession::class,
+        'cache.headers'    => \Illuminate\Http\Middleware\SetCacheHeaders::class,
+        'can'              => \Illuminate\Auth\Middleware\Authorize::class,
+        'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
+        'precognitive'     => \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
+        'signed'           => \Illuminate\Routing\Middleware\ValidateSignature::class,
+        'throttle'         => \Illuminate\Routing\Middleware\ThrottleRequests::class,
+        'verified'         => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+        // Sanctum
+        'abilities'        => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
+        'ability'          => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
     ];
 
     protected $routeMiddleware = [
-        // Laravel 10 y anteriores
-        'role' => \App\Http\Middleware\RoleMiddleware::class,
+        'role'             => \App\Http\Middleware\RoleMiddleware::class,
+        'auth'             => \App\Http\Middleware\Authenticate::class,
+        'guest'            => \App\Http\Middleware\RedirectIfAuthenticated::class,
+        'auth.basic'       => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
+        'auth.session'     => \Illuminate\Session\Middleware\AuthenticateSession::class,
+        'cache.headers'    => \Illuminate\Http\Middleware\SetCacheHeaders::class,
+        'can'              => \Illuminate\Auth\Middleware\Authorize::class,
+        'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
+        'precognitive'     => \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
+        'signed'           => \Illuminate\Routing\Middleware\ValidateSignature::class,
+        'throttle'         => \Illuminate\Routing\Middleware\ThrottleRequests::class,
+        'verified'         => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+        'abilities'        => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
+        'ability'          => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
     ];
 }
